@@ -208,8 +208,7 @@ main{
 .btn.ghost{border:1px solid var(--line2);background:transparent}
 
 /* ---------- demo stage ---------- */
-.stage{position:relative;height:min(52vh,420px);min-height:300px;border-radius:var(--r-lg);overflow:hidden;
-  border:1px solid var(--line);background:var(--surface);box-shadow:var(--sh);touch-action:manipulation;isolation:isolate}
+.stage{position:relative;height:min(52vh,420px);min-height:300px;border-radius:var(--r-lg);overflow:hidden;  border:1px solid var(--line);background:var(--surface);box-shadow:var(--sh);touch-action:manipulation;isolation:isolate}
 .stage.tall{height:min(64vh,560px)}
 .stage .scroller{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .stage .center{position:absolute;inset:0;display:grid;place-items:center;padding:22px}
@@ -4887,6 +4886,249 @@ window.CAT_DATA = (function () {
     return null;
   };
 
+  /* ---------- B#6 Shared-element Image Expansion｜图片展开 ---------- */
+  D['motion#6'] = function (host) {
+    var w = abs(host);
+    w.style.padding = '16px';
+    var lead = mk('div', null, '点缩略图：它连续放大成全屏，主体位置全程锁定。');
+    lead.style.cssText = 'font-size:12.5px;color:var(--muted);margin-bottom:12px';
+    var grid = mk('div');
+    grid.style.cssText = 'display:flex;gap:10px';
+    var hues = [['#f59e0b', '#ef4444'], ['#0ea5e9', '#6366f1'], ['#16a34a', '#84cc16']];
+    var thumbs = [];
+    hues.forEach(function (h, i) {
+      var t = mk('button');
+      t.type = 'button';
+      t.style.cssText = 'flex:1;height:88px;border-radius:12px;position:relative;overflow:hidden;' +
+        'background:linear-gradient(140deg,' + h[0] + ',' + h[1] + ');border:0;touch-action:none';
+      // 主体：一个圆，记录它在缩略图里的相对位置
+      var dot = mk('span');
+      dot.style.cssText = 'position:absolute;left:26%;top:30%;width:38%;height:38%;border-radius:50%;' +
+        'background:rgba(255,255,255,.9);box-shadow:0 2px 10px rgba(0,0,0,.25)';
+      t.appendChild(dot);
+      grid.appendChild(t);
+      thumbs.push({ t: t, h: h, dot: dot });
+    });
+    w.appendChild(lead); w.appendChild(grid);
+    note(host, '外壳与图像平面同时过渡 → 锚点逐帧锁定；关闭原路返回');
+
+    var mask = mk('div');
+    mask.style.cssText = 'position:absolute;inset:0;background:rgba(8,10,16,.72);opacity:0;pointer-events:none;' +
+      'transition:opacity .3s;z-index:8';
+    var shell = mk('div');
+    shell.style.cssText = 'position:absolute;left:12px;right:12px;top:12px;bottom:12px;border-radius:16px;' +
+      'overflow:hidden;opacity:0;pointer-events:none;z-index:9;will-change:transform,width,height,border-radius';
+    var plane = mk('div');
+    plane.style.cssText = 'position:absolute;inset:0;background-size:cover;background-position:center';
+    var anchor = mk('span');
+    anchor.style.cssText = 'position:absolute;border-radius:50%;background:rgba(255,255,255,.9);' +
+      'box-shadow:0 4px 18px rgba(0,0,0,.3)';
+    plane.appendChild(anchor);
+    var closeBtn = mk('button', null, '✕');
+    closeBtn.type = 'button';
+    closeBtn.style.cssText = 'position:absolute;right:10px;top:10px;width:32px;height:32px;border-radius:50%;' +
+      'background:rgba(0,0,0,.45);color:#fff;font-size:14px;z-index:2';
+    shell.appendChild(plane); shell.appendChild(closeBtn);
+    host.appendChild(mask); host.appendChild(shell);
+
+    var cur = null, anims = [];
+    function stop() { anims.forEach(function (a) { try { a.cancel(); } catch (e) { } }); anims = []; }
+
+    function openThumb(th) {
+      stop();
+      var tr = th.t.getBoundingClientRect();
+      var hr = host.getBoundingClientRect();
+      var dotR = th.dot.getBoundingClientRect();
+      // 主体在缩略图内的相对位置（归一化）
+      var ax = (dotR.left - tr.left) / tr.width;
+      var ay = (dotR.top - tr.top) / tr.height;
+      var asz = dotR.width / tr.width;
+
+      // 目标：近全屏
+      var gr = grid.getBoundingClientRect();
+      var target = { l: 12, t: 12, w: hr.width - 24, h: hr.height - 24 };
+      var from = { l: tr.left - hr.left, t: tr.top - hr.top, w: tr.width, h: tr.height };
+
+      plane.style.background = 'linear-gradient(140deg,' + th.h[0] + ',' + th.h[1] + ')';
+      shell.style.borderRadius = '12px';
+      shell.style.left = from.l + 'px';
+      shell.style.top = from.t + 'px';
+      shell.style.width = from.w + 'px';
+      shell.style.height = from.h + 'px';
+      shell.style.opacity = '1';
+      shell.style.pointerEvents = 'auto';
+      mask.style.opacity = '1';
+      mask.style.pointerEvents = 'auto';
+      th.t.style.visibility = 'hidden';
+      cur = th;
+
+      function placeAnchor(w, h) {
+        anchor.style.left = (ax * w) + 'px';
+        anchor.style.top = (ay * h) + 'px';
+        anchor.style.width = (asz * w) + 'px';
+        anchor.style.height = (asz * h) + 'px';
+      }
+      placeAnchor(from.w, from.h);
+
+      if (reduced()) {
+        shell.style.left = target.l + 'px'; shell.style.top = target.t + 'px';
+        shell.style.width = target.w + 'px'; shell.style.height = target.h + 'px';
+        placeAnchor(target.w, target.h);
+        return;
+      }
+
+      var t0 = performance.now(), dur = 420;
+      (function anim(now) {
+        var p = Math.min(1, (now - t0) / dur);
+        var e = 1 - Math.pow(1 - p, 3);
+        var ww = from.w + (target.w - from.w) * e;
+        var hh = from.h + (target.h - from.h) * e;
+        shell.style.left = (from.l + (target.l - from.l) * e) + 'px';
+        shell.style.top = (from.t + (target.t - from.t) * e) + 'px';
+        shell.style.width = ww + 'px';
+        shell.style.height = hh + 'px';
+        shell.style.borderRadius = (12 + (16 - 12) * e) + 'px';
+        placeAnchor(ww, hh);   // 主体位置与外壳同步插值 → 逐帧锁定
+        if (p < 1) requestAnimationFrame(anim);
+      })(t0);
+    }
+
+    function close() {
+      if (!cur) return;
+      stop();
+      var th = cur;
+      // 源项仍然存在 → 回到它当前的 rect；不存在就本地淡出
+      var tr = th.t.getBoundingClientRect();
+      var hr = host.getBoundingClientRect();
+      var alive = th.t.isConnected && tr.width > 0;
+      var tgt = alive
+        ? { l: tr.left - hr.left, t: tr.top - hr.top, w: tr.width, h: tr.height, r: 12 }
+        : { l: hr.width / 2 - 40, t: hr.height / 2 - 30, w: 80, h: 60, r: 12 };
+      var sr = shell.getBoundingClientRect();
+      var from = { l: sr.left - hr.left, t: sr.top - hr.top, w: sr.width, h: sr.height };
+      var ax = parseFloat(anchor.style.left) / (sr.width || 1);
+      var ay = parseFloat(anchor.style.top) / (sr.height || 1);
+      var asz = parseFloat(anchor.style.width) / (sr.width || 1);
+      var dur = 360, t0 = performance.now();
+      mask.style.opacity = '0'; mask.style.pointerEvents = 'none';
+      (function anim(now) {
+        var p = Math.min(1, (now - t0) / dur);
+        var e = 1 - Math.pow(1 - p, 3);
+        var ww = from.w + (tgt.w - from.w) * e;
+        var hh = from.h + (tgt.h - from.h) * e;
+        shell.style.left = (from.l + (tgt.l - from.l) * e) + 'px';
+        shell.style.top = (from.t + (tgt.t - from.t) * e) + 'px';
+        shell.style.width = ww + 'px';
+        shell.style.height = hh + 'px';
+        anchor.style.left = (ax * ww) + 'px';
+        anchor.style.top = (ay * hh) + 'px';
+        anchor.style.width = (asz * ww) + 'px';
+        anchor.style.height = (asz * hh) + 'px';
+        if (p < 1) requestAnimationFrame(anim);
+        else {
+          shell.style.opacity = '0';
+          shell.style.pointerEvents = 'none';
+          if (alive) th.t.style.visibility = '';
+          cur = null;
+        }
+      })(t0);
+    }
+
+    thumbs.forEach(function (th) { th.t.addEventListener('click', function () { openThumb(th); }); });
+    closeBtn.addEventListener('click', close);
+    mask.addEventListener('click', close);
+    return function () { stop(); };
+  };
+
+  /* ---------- B#7 Gesture-driven Transition｜手势转场 ---------- */
+  D['motion#7'] = function (host) {
+    var w = abs(host);
+    // 上级页面留在原地可见
+    var under = mk('div');
+    under.style.cssText = 'position:absolute;inset:0;background:var(--surface2);padding:18px;transition:transform .2s';
+    var ut = mk('div', null, '列表页');
+    ut.style.cssText = 'font-size:16px;font-weight:680';
+    var ul = mk('div', null, '上级页面全程留在原地——推拉门，不是横向翻页。');
+    ul.style.cssText = 'font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.6';
+    under.appendChild(ut); under.appendChild(ul);
+    for (var i = 0; i < 5; i++) {
+      var r = mk('div', 'd-row', '列表项 ' + (i + 1));
+      r.style.borderBottom = '1px solid var(--line)';
+      under.appendChild(r);
+    }
+    var pane = mk('div');
+    pane.style.cssText = 'position:absolute;inset:0;background:var(--surface);box-shadow:-8px 0 24px rgba(0,0,0,.12);' +
+      'display:flex;flex-direction:column;touch-action:none;will-change:transform';
+    var ph = mk('div');
+    ph.style.cssText = 'padding:16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px';
+    var back = mk('button', null, '‹');
+    back.type = 'button';
+    back.style.cssText = 'width:32px;height:32px;border-radius:10px;background:var(--surface2);font-size:17px;color:var(--fg)';
+    var ptt = mk('div', null, '详情页');
+    ptt.style.cssText = 'font-size:15.5px;font-weight:660';
+    ph.appendChild(back); ph.appendChild(ptt);
+    var pb = mk('div');
+    pb.style.cssText = 'padding:16px;font-size:13px;color:var(--muted);line-height:1.7;flex:1';
+    pb.textContent = '从右往左拖动这一页：拖动位移直接控制进度，手指停住画面也停住。松手时距离是唯一完成判据——拖不到一半必然弹回。';
+    pane.appendChild(ph); pane.appendChild(pb);
+    host.appendChild(under); host.appendChild(pane);
+    note(host, '松手以距离判定（>55% 才完成）；速度只用于辨别方向');
+
+    var W = 0, prog = 1, dragging = false, startX = 0, startProg = 1, lastX = 0, lastT = 0, v = 0;
+    function measure() { W = host.clientWidth || 360; }
+    measure();
+    function apply() {
+      pane.style.transform = 'translateX(' + ((1 - prog) * W) + 'px)';
+      under.style.transform = 'scale(' + (0.96 + 0.04 * prog) + ')';
+    }
+    setTimeout(function () { measure(); apply(); }, 30);
+
+    function open() { prog = 1; apply(); pane.style.transform = 'translateX(0)'; }
+    function closeIt() {
+      // 收起后从右侧重新推入，便于反复试
+      prog = 1;
+      pane.style.transition = 'none';
+      pane.style.transform = 'translateX(' + W + 'px)';
+      under.style.transform = 'scale(.96)';
+      void pane.offsetHeight;
+      pane.style.transition = 'transform .42s cubic-bezier(.22,1,.36,1)';
+      pane.style.transform = 'translateX(0)';
+      under.style.transition = 'transform .42s';
+      under.style.transform = 'scale(1)';
+      setTimeout(function () { pane.style.transition = 'none'; }, 440);
+    }
+    back.addEventListener('click', closeIt);
+
+    pane.addEventListener('pointerdown', function (e) {
+      dragging = true;
+      startX = e.clientX; startProg = prog;
+      lastX = e.clientX; lastT = performance.now(); v = 0;
+      pane.style.transition = 'none'; under.style.transition = 'none';
+      try { pane.setPointerCapture(e.pointerId); } catch (er) { }
+    });
+    pane.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      var now = performance.now();
+      v = (e.clientX - lastX) / Math.max(1, now - lastT);
+      lastX = e.clientX; lastT = now;
+      var dx = e.clientX - startX;
+      prog = Math.max(0, Math.min(1, startProg + dx / W));
+      apply();
+    });
+    function end() {
+      if (!dragging) return;
+      dragging = false;
+      pane.style.transition = 'transform .34s cubic-bezier(.22,1,.36,1)';
+      under.style.transition = 'transform .34s';
+      // 距离是唯一完成判据
+      if (prog < 0.45) { prog = 0; apply(); note(host, '已返回列表（拖不到一半，弹回）'); }
+      else { prog = 1; apply(); note(host, '留在详情页（超过临界距离，完成）'); }
+    }
+    pane.addEventListener('pointerup', end);
+    pane.addEventListener('pointercancel', end);
+    setTimeout(closeIt, 40);
+    return null;
+  };
 
   /* ---------- C#1 Page Loader｜整页加载 ---------- */
   D['loading#1'] = function (host) {
@@ -6329,62 +6571,6 @@ window.CAT_DATA = (function () {
   };
 
   /* ============================================================
-     2.5 质感动效 1-8：用用户自己那份 demo-8-effects.html 的原版实现
-     （iframe 隔离：那份页面是深色主题 + :root/body 全局样式，
-       内联会污染 app 的浅色样式。用 iframe 跑原代码，效果与用户验证过的一致。）
-     ============================================================ */
-  (function () {
-    var FX_TITLES = {
-      1: '磁吸吸附',
-      2: '液态形变',
-      3: '3D 视差',
-      4: '中心聚焦',
-      5: '液态 Tab 指示器',
-      6: '图片展开',
-      7: '手势转场',
-      8: '碰撞回弹'
-    };
-    /* 播放器算好缩放后会 postMessage 报回实际宽度，这里把舞台收窄到贴合手机，
-       否则 iframe 比手机壳宽，两侧会留出大片黑边 */
-    var fitHandler = null;
-    function ensureFitListener() {
-      if (fitHandler) return;
-      fitHandler = function (e) {
-        if (!e.data || !e.data.fxFit) return;
-        var st = document.querySelector('.stage[data-fxfit]');
-        if (!st) return;
-        var w = e.data.w;
-        if (w && w > 80) {
-          /* 收到手机的实际宽度后把舞台收窄到贴合；同时清掉内边距、
-             并把底色设成手机壳的深色，避免两侧露出舞台自身的浅色 */
-          st.style.maxWidth = w + 'px';
-          st.style.width = w + 'px';
-          st.style.marginLeft = 'auto';
-          st.style.marginRight = 'auto';
-          st.style.padding = '0';
-          st.style.background = '#0d0f13';
-        }
-      };
-      window.addEventListener('message', fitHandler);
-    }
-    Object.keys(FX_TITLES).forEach(function (k) {
-      D['motion#' + k] = function (host) {
-        host.style.padding = '0';
-        host.style.overflow = 'hidden';
-        host.setAttribute('data-fxfit', '1');
-        ensureFitListener();
-        var frame = document.createElement('iframe');
-        frame.setAttribute('title', FX_TITLES[k]);
-        frame.setAttribute('loading', 'eager');
-        frame.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:#0d0f13';
-        frame.src = './fx-player.html#fx' + k;
-        host.appendChild(frame);
-        return function () { /* iframe 随 host 一起移除 */ };
-      };
-    });
-  })();
-
-  /* ============================================================
      3. 取演示：先看总表专用演示，再回落到映射的已有演示
      （放在最后，确保 D 已填好）
      ============================================================ */
@@ -6396,7 +6582,6 @@ window.CAT_DATA = (function () {
     return null;
   };
 })();
-
 </script>
 <script>
 (function () {
@@ -6778,8 +6963,6 @@ window.CAT_DATA = (function () {
       dh.appendChild(el('span', null, '直接操作这个舞台'));
       dblk.appendChild(dh);
       var stage = el('div', 'stage');
-      /* 质感动效那 8 条跑的是用户原版 demo（iframe 内是完整手机壳），需要更高的舞台 */
-      if (c.id === 'motion') stage.classList.add('tall');
       dblk.appendChild(stage);
       var tools = el('div', 'stage-tools');
       var again = el('button', 'btn ghost', '重新加载');
