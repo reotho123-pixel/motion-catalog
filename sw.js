@@ -1,9 +1,10 @@
 /* 交互动效总表 - Service Worker
    更新应用内容后，把下面的 CACHE 版本号 +1 再部署，否则已安装用户拿不到新版 */
-var CACHE = 'motion-catalog-v1';
+var CACHE = 'motion-catalog-v2';
 var ASSETS = [
   './',
   './index.html',
+  './fx-player.html',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
