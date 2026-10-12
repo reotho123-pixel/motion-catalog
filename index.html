@@ -658,6 +658,53 @@ window.CAT_DATA = (function () {
       ]
     },
 
+    /* ---------------- B2. 按钮反馈 ---------------- */
+    {
+      id: 'btn', label: '按钮反馈', num: 'B2',
+      title: '按钮按下 / 松手的反馈',
+      desc: '管「按下去到松手」这一两百毫秒：按住要停在一个明确的已按下形态，松手才是回弹。反馈来源分缩放、厚度、位移三种。',
+      src: 'references/button-feedback.md',
+      items: [
+        {
+          n: 1, en: 'Spring Press', zh: '弹簧按压回弹', tested: true,
+          use: '最通用的主操作按钮（保存、提交、确认）。不知道选哪个时选它。',
+          rules: [
+            '幅度 1 → 0.93；松手回到 1 并过冲约 +2.5% 再收住',
+            '按下 k=470/d=27（ζ≈0.62，快、几乎不过冲）；松手 k=380/d=12（ζ≈0.31，软、带回弹）',
+            '按住时叠一层 12% 暗色，让「按住」这件事本身也有反馈',
+            '按下与松手必须用两组弹簧参数——搞反了按住期间按钮会自己晃',
+            '降级：幅度降到 0.97 瞬时到位，不回弹'
+          ],
+          accept: '按住立刻收、停住不晃；松手过冲一次即收；连按 3 轮落定值不漂移。',
+          demo: 'demo-button-feedback.html'
+        },
+        {
+          n: 2, en: 'Key Cap', zh: '键帽下压', tested: true,
+          use: '工具类操作、密集排列的按钮（重命名、标签、键盘式布局）。反馈来源是厚度。',
+          rules: [
+            '顶面下沉 7px 沉进底座，底座不动 → 厚度从 9px 压到 2px（「按进去了」，不是「变小了」）',
+            '顶面同时纵向压扁 0.985（scaleY，transform-origin:50% 0），只给背景层；文字层只平移，字形不被压变形',
+            '按下 k=620/d=36（ζ≈0.72，干脆到底）；松手 k=620/d=28（ζ≈0.56），弹起过冲约 0.5px',
+            '降级：位移瞬时到位，不回弹（位移是状态不是装饰，保留）'
+          ],
+          accept: '按住能看出剩余厚度、松手弹起到位；连按 3 轮顶面精确回到 0；文字无变形。',
+          demo: 'demo-button-feedback.html'
+        },
+        {
+          n: 3, en: 'Hard Shadow', zh: '硬阴影下压', tested: true,
+          use: '新粗野主义风格（粗描边 + 实心硬阴影 + 高饱和色块）的按钮。反馈来源是位移吃掉阴影。',
+          rules: [
+            '阴影固定 5px 不动；按钮面下沉 4.2px 去「吃掉」它，剩一条 0.8px 黑边',
+            '松手弹回并过冲约 0.85px，形成一次轻微的「抬离」',
+            '按下 k=700/d=40（ζ≈0.76）、松手 k=700/d=22（ζ≈0.42）——刻意做硬做快，软弹簧会毁掉这套风格的硬朗',
+            '降级：位移瞬时到位，不做回弹（位移是状态不是装饰，保留）'
+          ],
+          accept: '按住时黑边从 5px 收到约 0.8px、松手弹回；阴影全程不跟着动；连按 3 轮精确归位。',
+          demo: 'demo-button-feedback.html'
+        }
+      ]
+    },
+
     /* ---------------- C. 加载 ---------------- */
     {
       id: 'loading', label: '加载', num: 'C',
@@ -1120,6 +1167,10 @@ window.CAT_DATA = (function () {
     { want: '缩略图放大成整屏大图', go: 'Shared-element Image Expansion 图片展开', cat: 'motion' },
     { want: '拖动返回上一页，能中途反悔', go: 'Gesture-driven Transition 手势转场', cat: 'motion' },
     { want: '小球互相碰撞推开、回弹', go: 'Collision and Spring Response 碰撞回弹', cat: 'motion' },
+
+    { want: '按钮按下去要有质感、会回弹', go: 'Spring Press 弹簧按压回弹', cat: 'btn' },
+    { want: '按钮像键盘键帽一样按进去', go: 'Key Cap 键帽下压', cat: 'btn' },
+    { want: '按钮按下去吃掉下面的硬阴影', go: 'Hard Shadow 硬阴影下压', cat: 'btn' },
 
     { want: '页面打开时先显示占位', go: 'Skeleton 骨架屏 + Shimmer 扫光', cat: 'loading' },
     { want: '提交按钮点了之后转圈', go: 'Button Loading 按钮加载', cat: 'loading' },
@@ -6571,6 +6622,209 @@ window.CAT_DATA = (function () {
   };
 
   /* ============================================================
+     B2. 按钮反馈（按下 / 松手）
+     三条共用一套弹簧内核；每条按下与松手用两组参数是重点。
+     ============================================================ */
+  function b2Spring(x, k, d) { return { x: x, v: 0, t: x, k: k, d: d }; }
+  function b2Step(s, dt) { s.v += (s.t - s.x) * s.k * dt; s.v *= Math.exp(-s.d * dt); s.x += s.v * dt; }
+
+  /* 指针与键盘共用一条路径；pointercancel 与失焦都算松手 */
+  function b2Bind(el, onDown, onUp) {
+    var held = false;
+    function down() { if (held) return; held = true; onDown(); }
+    function up() { if (!held) return; held = false; onUp(); }
+    el.addEventListener('pointerdown', function (e) {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      down();
+    });
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    el.addEventListener('keydown', function (e) {
+      if (e.key === ' ' || e.key === 'Enter') { if (e.repeat) return; down(); }
+    });
+    el.addEventListener('keyup', function (e) { if (e.key === ' ' || e.key === 'Enter') up(); });
+    el.addEventListener('blur', up);
+    /* 返回拆除函数：键盘与窗口级监听不能留在页面上 */
+    return function () {
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+  }
+
+  /* 一条 rAF 循环驱动一个弹簧；返回停止函数 */
+  function b2Loop(stepFn) {
+    var raf = 0, t0 = 0;
+    function tick(now) {
+      if (!t0) t0 = now;
+      var dt = Math.min(0.033, Math.max(0.001, (now - t0) / 1000));
+      t0 = now;
+      stepFn(dt);
+      raf = requestAnimationFrame(tick);
+    }
+    raf = requestAnimationFrame(tick);
+    return function () { if (raf) cancelAnimationFrame(raf); raf = 0; };
+  }
+
+  /* ---------- B2#1 Spring Press｜弹簧按压回弹 ---------- */
+  D['btn#1'] = function (host) {
+    var w = abs(host);
+    w.style.cssText += 'align-items:center;justify-content:center;gap:14px';
+    var skin = mk('div');
+    skin.style.cssText = 'position:relative;width:236px;height:60px;border-radius:18px;overflow:hidden;' +
+      'background:linear-gradient(180deg,#4054e8,#3140cf);box-shadow:0 12px 26px -6px rgba(49,64,207,.55);' +
+      'display:grid;place-items:center;color:#fff;font-size:16px;font-weight:700;letter-spacing:.5px;' +
+      'transform-origin:50% 50%;will-change:transform;cursor:pointer;touch-action:manipulation;user-select:none';
+    skin.setAttribute('role', 'button');
+    skin.setAttribute('tabindex', '0');
+    /* 按住态的压暗用一层 overlay 的 opacity，不动 filter */
+    var shade = mk('span');
+    shade.style.cssText = 'position:absolute;inset:0;background:#000;opacity:0;transition:opacity .16s;pointer-events:none';
+    var lbl = mk('span', null, '保存并提交');
+    lbl.style.cssText = 'position:relative;z-index:2';
+    skin.appendChild(shade); skin.appendChild(lbl);
+    w.appendChild(skin);
+    var st = mk('div', null, '按住别松手：看它立刻收住');
+    st.style.cssText = 'font-size:12.5px;color:var(--muted);text-align:center';
+    w.appendChild(st);
+    note(host, '按下 k=470/d=27（快、几乎不过冲）；松手 k=380/d=12（软、带回弹约 +2.5%）');
+
+    var s = b2Spring(1, 470, 27);
+    var last = '', lastTxt = '';
+    function setTxt(v) { if (v !== lastTxt) { st.textContent = v; lastTxt = v; } }
+    function draw() {
+      var v = 'scale(' + s.x.toFixed(4) + ')';
+      if (v !== last) { skin.style.transform = v; last = v; }
+    }
+    draw();
+    var stop = b2Loop(function (dt) { b2Step(s, dt); draw(); });
+    var detach = b2Bind(skin, function () {
+      shade.style.opacity = '.12';
+      if (reduced()) { s.x = s.t = 0.97; s.v = 0; draw(); setTxt('降级：瞬时到 0.97，无回弹'); return; }
+      s.k = 470; s.d = 27; s.t = 0.93;
+      setTxt('已按下 0.93 · 松手看回弹');
+    }, function () {
+      shade.style.opacity = '0';
+      if (reduced()) { s.x = s.t = 1; s.v = 0; draw(); setTxt('松手：瞬时回 1.0'); return; }
+      s.k = 380; s.d = 12; s.t = 1;
+      setTxt('松手：过冲一次后收回 1.0');
+    });
+
+    return function () { stop(); detach(); };
+  };
+
+  /* ---------- B2#2 Key Cap｜键帽下压 ---------- */
+  D['btn#2'] = function (host) {
+    var w = abs(host);
+    w.style.cssText += 'align-items:center;justify-content:center;gap:14px';
+    var btn = mk('div');
+    btn.style.cssText = 'position:relative;width:236px;height:66px;cursor:pointer;touch-action:manipulation;' +
+      'user-select:none';
+    btn.setAttribute('role', 'button');
+    btn.setAttribute('tabindex', '0');
+    btn.style.cssText += ';transform-origin:50% 50%';
+    /* 底座：不动，顶面沉进去时露出剩余厚度 */
+    var base = mk('div');
+    base.style.cssText = 'position:absolute;left:0;right:0;top:9px;bottom:0;border-radius:16px;' +
+      'background:linear-gradient(180deg,#2b3348,#141822);box-shadow:inset 0 3px 7px rgba(0,0,0,.55)';
+    /* 顶面：整体平移，不缩放 —— 文字要跟它一起动且不变形 */
+    var top = mk('div');
+    top.style.cssText = 'position:absolute;left:0;right:0;top:0;height:57px;display:grid;place-items:center;' +
+      'will-change:transform';
+    /* 键帽背景层：纵向压扁只作用在这一层（origin 在顶边） */
+    var cap = mk('div');
+    cap.style.cssText = 'position:absolute;inset:0;border-radius:16px;' +
+      'background:linear-gradient(180deg,#fbfcfe,#dbe1ee);box-shadow:inset 0 1px 0 #fff,0 1px 3px rgba(0,0,0,.35);' +
+      'transform-origin:50% 0;will-change:transform';
+    var lbl = mk('span', null, '重命名');
+    lbl.style.cssText = 'position:relative;color:#14161c;font-size:16px;font-weight:700;letter-spacing:.5px';
+    top.appendChild(cap); top.appendChild(lbl);
+    btn.appendChild(base); btn.appendChild(top);
+    w.appendChild(btn);
+
+    var st = mk('div', null, '厚度 9px · 按住看它沉进去');
+    st.style.cssText = 'font-size:12.5px;color:var(--muted);text-align:center';
+    w.appendChild(st);
+    note(host, '顶面下沉 7px（厚度 9→2px）；压扁只给背景层，文字不被压变形');
+
+    var s = b2Spring(0, 620, 36);
+    var lastT = '', lastC = '', lastTxt = '';
+    function setTxt(v) { if (v !== lastTxt) { st.textContent = v; lastTxt = v; } }
+    function draw() {
+      var t = 'translateY(' + s.x.toFixed(3) + 'px)';
+      if (t !== lastT) { top.style.transform = t; lastT = t; }
+      var c = 'scaleY(' + (1 - s.x * 0.0021).toFixed(4) + ')';
+      if (c !== lastC) { cap.style.transform = c; lastC = c; }
+      /* 文案只在整数厚度变化时才写，避免每帧写 textContent */
+      var th = Math.max(2, 9 - s.x).toFixed(0);
+      setTxt(s.x > 3
+        ? '厚度 ' + th + 'px · 已按下'
+        : '厚度 ' + th + 'px · 按住看它沉进去');
+    }
+    draw();
+    var stop = b2Loop(function (dt) { b2Step(s, dt); draw(); });
+    var detach = b2Bind(btn, function () {
+      if (reduced()) { s.x = s.t = 7; s.v = 0; draw(); return; }
+      s.k = 620; s.d = 36; s.t = 7;
+    }, function () {
+      if (reduced()) { s.x = s.t = 0; s.v = 0; draw(); return; }
+      s.k = 620; s.d = 28; s.t = 0;
+    });
+
+    return function () { stop(); detach(); };
+  };
+
+  /* ---------- B2#3 Hard Shadow｜硬阴影下压 ---------- */
+  D['btn#3'] = function (host) {
+    var w = abs(host);
+    w.style.cssText += 'align-items:center;justify-content:center;gap:14px';
+    var btn = mk('div');
+    btn.style.cssText = 'position:relative;width:238px;height:62px;cursor:pointer;touch-action:manipulation;' +
+      'user-select:none';
+    btn.setAttribute('role', 'button');
+    btn.setAttribute('tabindex', '0');
+    /* 阴影：全程不动 */
+    var hs = mk('div');
+    hs.style.cssText = 'position:absolute;inset:0;border-radius:14px;background:var(--fg);opacity:.88;' +
+      'transform:translate(5px,5px)';
+    /* 按钮面：下沉去吃掉阴影 */
+    var face = mk('div');
+    face.style.cssText = 'position:absolute;inset:0;border-radius:14px;display:grid;place-items:center;' +
+      'background:#ffd43b;border:2px solid #14161c;color:#14161c;font-size:16px;font-weight:800;' +
+      'letter-spacing:.5px;will-change:transform';
+    face.textContent = '加入采购清单';
+    btn.appendChild(hs); btn.appendChild(face);
+    w.appendChild(btn);
+
+    var st = mk('div', null, '黑边 5px · 按住看它被吃掉');
+    st.style.cssText = 'font-size:12.5px;color:var(--muted);text-align:center';
+    w.appendChild(st);
+    note(host, '阴影固定不动；按钮面下沉 4.2px 吃掉它，剩 0.8px；按下 k=700/d=40、松手 k=700/d=22');
+
+    var s = b2Spring(0, 700, 40);
+    var last = '', lastTxt = '';
+    function setTxt(v) { if (v !== lastTxt) { st.textContent = v; lastTxt = v; } }
+    function draw() {
+      var v = 'translate(' + s.x.toFixed(3) + 'px,' + s.x.toFixed(3) + 'px)';
+      if (v !== last) { face.style.transform = v; last = v; }
+      /* 黑边取整到 0.1px，同样只在变化时写 */
+      setTxt(s.x > 2
+        ? '黑边 ' + Math.max(0.8, 5 - s.x).toFixed(1) + 'px · 已按下（吃掉了）'
+        : '黑边 ' + Math.max(0.8, 5 - s.x).toFixed(1) + 'px · 按住看它被吃掉');
+    }
+    draw();
+    var stop = b2Loop(function (dt) { b2Step(s, dt); draw(); });
+    var detach = b2Bind(btn, function () {
+      if (reduced()) { s.x = s.t = 4.2; s.v = 0; draw(); return; }
+      s.k = 700; s.d = 40; s.t = 4.2;
+    }, function () {
+      if (reduced()) { s.x = s.t = 0; s.v = 0; draw(); return; }
+      s.k = 700; s.d = 22; s.t = 0;
+    });
+
+    return function () { stop(); detach(); };
+  };
+
+  /* ============================================================
      3. 取演示：先看总表专用演示，再回落到映射的已有演示
      （放在最后，确保 D 已填好）
      ============================================================ */
@@ -6709,6 +6963,12 @@ window.CAT_DATA = (function () {
     '拖动': ['Drag', 'Magnetic', 'Velocity-driven', '拖拽', '磁吸'],
     '滑动': ['Drag', 'Curved Card Deletion', 'Gesture'],
     '手势': ['Gesture-driven Transition', '手势转场'],
+    '按压': ['Spring Press', 'Key Cap', 'Hard Shadow', '弹簧按压回弹', '键帽下压', '硬阴影下压'],
+    '下压': ['Spring Press', 'Key Cap', 'Hard Shadow', '键帽下压', '硬阴影下压'],
+    '按下': ['Spring Press', 'Key Cap', 'Hard Shadow', '弹出'],
+    '键帽': ['Key Cap', '键帽下压'],
+    '机械键盘': ['Key Cap', '键帽下压'],
+    '新粗野': ['Hard Shadow', '硬阴影下压'],
     '返回': ['Gesture-driven Transition', '手势转场'],
     '删除': ['Curved Card Deletion', '卡片曲线删除'],
     '吸': ['Magnetic Attraction', '磁吸'],
@@ -6747,11 +7007,11 @@ window.CAT_DATA = (function () {
     '省市区': ['Cascade', '级联选择'],
     '树': ['Tree View', '树形结构'],
     '表单': ['Single Select', 'Stepper', 'Date Range'],
-    '按钮': ['Button Loading', 'Split Action', 'Circle to Pill'],
+    '按钮': ['Spring Press', 'Key Cap', 'Hard Shadow', 'Button Loading', 'Split Action', 'Circle to Pill', '按钮加载'],
     '碰撞': ['Collision and Spring Response', '碰撞回弹'],
     '磁': ['Magnetic Attraction', '磁吸'],
-    '回弹': ['Spring', 'Collision and Spring Response', 'Velocity-driven Deformation'],
-    '弹簧': ['Spring', '回弹'],
+    '回弹': ['Spring Press', 'Key Cap', 'Hard Shadow', 'Collision and Spring Response', 'Velocity-driven Deformation', '弹簧按压回弹'],
+    '弹簧': ['Spring Press', '弹簧按压回弹', '回弹'],
     '圆角': ['Corner Radius Morph', '圆角变化'],
     '尺寸': ['Size Morph', 'Resize Drag', '尺寸变化'],
     '重排': ['Content Reflow', '内容重排'],
