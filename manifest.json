@@ -1,7 +1,7 @@
 {
   "name": "交互动效总表",
   "short_name": "动效总表",
-  "description": "app-interaction-design skill 里全部交互与动效条目的索引，支持搜索与按需求查找",
+  "description": "design-app-interactions skill 里全部交互与动效条目的索引，支持搜索与按需求查找",
   "lang": "zh-CN",
   "id": "./",
   "start_url": "./",

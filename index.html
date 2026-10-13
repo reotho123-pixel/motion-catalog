@@ -293,7 +293,7 @@ main{
   <section class="view active" id="v-home">
     <div class="hero">
       <h1>交互动效总表</h1>
-      <p>app-interaction-design 里全部条目的索引。想不起来有哪个效果时，来这里查。</p>
+      <p>design-app-interactions 里全部条目的索引。想不起来有哪个效果时，来这里查。</p>
       <div class="stats">
         <div><b id="stTotal">—</b><i>条目</i></div>
         <div><b id="stCats">—</b><i>分类</i></div>
@@ -335,7 +335,7 @@ main{
   <section class="view" id="v-about">
     <div class="card">
       <h3>这是什么</h3>
-      <p>把 <code>app-interaction-design</code> skill 里全部 <b id="abTotal">—</b> 条交互与动效整理成索引：交互模式、质感动效、加载、浮层、导航、展开、下拉选单、图表、形态变化、文字动效。</p>
+      <p>把 <code>design-app-interactions</code> skill 里全部 <b id="abTotal">—</b> 条交互与动效整理成索引：交互模式、质感动效、加载、浮层、导航、展开、下拉选单、图表、形态变化、文字动效。</p>
       <p>每条都带「适用 / 实现约束 / 验收」三段，可以复制成请求直接发给 AI。</p>
     </div>
     <div class="card">
@@ -351,13 +351,13 @@ main{
         <span class="tg demo">demo-10-interactions.html</span>
         <span class="tg demo">demo-8-effects.html</span>
       </div>
-      <p style="margin-top:10px">位置：<code>~\.agents\skills\app-interaction-design\assets\</code></p>
+      <p style="margin-top:10px">位置：<code>~\.agents\skills\design-app-interactions\assets\</code></p>
     </div>
     <div class="note">
       <b>「已实测」</b>标记的条目在真实浏览器里逐条实拖实点验证过；没标的来自规则文档，参数需按目标项目重新调。演示里的时长、回弹、阈值都是可调初值，不是行业标准。
     </div>
     <div class="foot">
-      app-interaction-design · <span id="abCount">—</span> 条<br>
+      design-app-interactions · <span id="abCount">—</span> 条<br>
       数据仅保存在本机，离线可用
     </div>
   </section>
@@ -388,8 +388,8 @@ main{
 
 <script>
 /* ============================================================
-   app-interaction-design skill —— 全部动效与交互条目
-   数据来源：C:\Users\35418\.agents\skills\app-interaction-design\
+   design-app-interactions skill —— 全部动效与交互条目
+   数据来源：C:\Users\35418\.agents\skills\design-app-interactions\
    ============================================================ */
 window.CAT_DATA = (function () {
 
@@ -7271,7 +7271,7 @@ window.CAT_DATA = (function () {
     });
     var sp = el('button', 'btn ghost', 'skill 里的位置');
     sp.addEventListener('click', function () {
-      copy('~/.agents/skills/app-interaction-design/' + c.src + ' → ' + c.title + ' → ' + it.zh);
+      copy('~/.agents/skills/design-app-interactions/' + c.src + ' → ' + c.title + ' → ' + it.zh);
     });
     foot.appendChild(cp); foot.appendChild(sp);
     body.appendChild(foot);

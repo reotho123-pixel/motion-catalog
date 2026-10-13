@@ -1,13 +1,13 @@
 # 交互动效总表
 
-app-interaction-design skill 里全部交互与动效条目的索引，做成手机 app 形态。
+design-app-interactions skill 里全部交互与动效条目的索引，做成手机 app 形态。
 
 - **80 条**：交互模式 11 · 质感动效 8 · 按钮反馈 3 · 加载 7 · 浮层 6 · 导航 7 · 展开 8 · 下拉选单 8 · 图表 7 · 形态变化 8 · 文字动效 7
 - **每条都可上手试**：点开条目，演示直接出现在最上方
 - **三种找法**：搜名字（支持口语词）、按需求查（68 条大白话映射）、按分类浏览
 - **离线可用**：PWA，添加到主屏后断网也能开
 
-数据源：`~/.agents/skills/app-interaction-design/`
+数据源：`~/.agents/skills/design-app-interactions/`
 
 ## 更新方法
 
