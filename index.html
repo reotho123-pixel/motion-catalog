@@ -108,10 +108,12 @@ main{
 .hero .stats b{font-size:18px;font-weight:700}
 .hero .stats i{font-style:normal;font-size:10.5px;color:var(--ink-fg);opacity:.62}
 .hero .acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
-.hero .acts button{min-height:40px;padding:0 15px;border-radius:11px;background:var(--ink-fg);opacity:.18;
+/* 底色用 color-mix 做半透明，而不是 opacity —— opacity 会把文字一起淡掉，文字就看不见了 */
+.hero .acts button{min-height:40px;padding:0 15px;border-radius:11px;
+  background:color-mix(in srgb,var(--ink-fg) 18%,transparent);
   color:var(--ink-fg);font-size:13.5px;font-weight:580;transition:transform .12s}
 .hero .acts button:active{transform:scale(.97)}
-.hero .acts button.solid{background:var(--ink-fg);opacity:1;color:var(--ink)}
+.hero .acts button.solid{background:var(--ink-fg);color:var(--ink)}
 
 /* ---------- search ---------- */
 .searchbar{display:flex;align-items:center;gap:9px;padding:0 13px;height:46px;border-radius:13px;
@@ -121,12 +123,19 @@ main{
 .searchbar input::-webkit-search-cancel-button{-webkit-appearance:none}
 .searchbar .clr{width:26px;height:26px;border-radius:50%;background:var(--surface2);display:grid;place-items:center;
   font-size:13px;color:var(--muted);flex:0 0 auto}
-.chips{display:flex;gap:6px;margin-top:12px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+/* 标签让位：容器 position:relative 既是 offsetLeft 的坐标系，也是从不被 transform 的点击承载层。
+   高度写死 46px（比最高那颗略高）：选中项真实变高时行高不变 → 让位只发生在水平方向，不推动整页。
+   gap:8px 是让位后的间距下限，由真实 flex 布局保证，不靠 JS 补 */
+.chips{position:relative;display:flex;align-items:center;gap:8px;height:46px;margin-top:12px;
+  overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
-.chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:999px;
+.chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:999px;line-height:1.35;
   background:var(--surface);border:1px solid var(--line);font-size:12.5px;white-space:nowrap;flex:0 0 auto;
-  transition:background .16s,color .16s,border-color .16s}
-.chip.on{background:var(--ink);border-color:var(--ink);color:var(--ink-fg);font-weight:600}
+  will-change:transform;transition:background .16s,color .16s,border-color .16s}
+/* 选中项：padding + 字号真实变大（参与布局 → 邻居被真实挤开，需要让位）。
+   尺寸本身不做 CSS 过渡：让位的平滑交给 JS 的 FLIP，过渡会让「切换后的布局测量」落在半途 */
+.chip.on{background:var(--ink);border-color:var(--ink);color:var(--ink-fg);font-weight:660;
+  padding:9px 16px;font-size:14px}
 .chip .c{opacity:.65;font-size:11px}
 .count{font-size:12.5px;color:var(--muted);margin:11px 2px 0}
 .quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px}
@@ -171,18 +180,16 @@ main{
 .pick .arrow{color:var(--line2);flex:0 0 auto;font-size:14px}
 .pick .go{flex:0 0 auto;max-width:46%;font-size:12.5px;color:var(--fg);font-weight:600;text-align:right;line-height:1.4}
 
-/* ---------- sheet ---------- */
-.sheet-mask{position:fixed;inset:0;background:rgba(14,11,11,.45);opacity:0;pointer-events:none;
-  transition:opacity .24s;z-index:60}
+/* ---------- sheet（「从按钮形变展开」由 JS 用 WAAPI 驱动，CSS 只管最终静止形态） ---------- */
+.sheet-mask{position:fixed;inset:0;background:rgba(14,11,11,.45);opacity:0;pointer-events:none;z-index:60}
 .sheet-mask.on{opacity:1;pointer-events:auto}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:61;max-height:88vh;display:flex;flex-direction:column;
-  background:var(--surface);border-radius:22px 22px 0 0;border-top:1px solid var(--line);
-  box-shadow:var(--sh-lg);transform:translateY(102%);
-  transition:transform .34s cubic-bezier(.2,.9,.25,1);padding-bottom:var(--safe-b)}
-.sheet.on{transform:none}
+  background:var(--surface);border-radius:22px 22px 0 0;border-top:1px solid var(--line);overflow:hidden;
+  box-shadow:var(--sh-lg);visibility:hidden;padding-bottom:var(--safe-b)}
+.sheet.on{visibility:visible}
+/* 桌面端用 left 居中，而不是 translate(-50%)：形变动画要独占 transform，两边不能抢同一个属性 */
 @media(min-width:760px){
-  .sheet{left:50%;right:auto;transform:translate(-50%,102%);width:640px;border-radius:22px;bottom:24px;max-height:82vh}
-  .sheet.on{transform:translate(-50%,0)}
+  .sheet{left:calc(50% - 320px);right:auto;width:640px;border-radius:22px;bottom:24px;max-height:82vh}
 }
 .sheet .grab{width:38px;height:4px;border-radius:99px;background:var(--line2);margin:9px auto 0;flex:0 0 auto}
 .sheet .sh-head{padding:12px 20px;border-bottom:1px solid var(--line);flex:0 0 auto}
@@ -6885,6 +6892,16 @@ window.CAT_DATA = (function () {
     else fb();
   }
 
+  /* ---------- motion preference ----------
+     两个形变动效都用 WAAPI 驱动，CSS 里的 reduced-motion 规则管不到，必须在 JS 里自己 gate */
+  var motionOff = false;
+  try {
+    var mql = matchMedia('(prefers-reduced-motion: reduce)');
+    motionOff = mql.matches;
+    var onMql = function () { motionOff = mql.matches; };
+    if (mql.addEventListener) mql.addEventListener('change', onMql); else if (mql.addListener) mql.addListener(onMql);
+  } catch (e) { }
+
   /* ---------- theme ---------- */
   var TKEY = 'motion-catalog-v1';
   function applyTheme(m) {
@@ -7079,12 +7096,29 @@ window.CAT_DATA = (function () {
   }
   function setFilter(f) {
     filter = f;
-    Array.prototype.slice.call($('#chips').children).forEach(function (b, i) {
-      var on = (i === 0 && f === 'all')
-        || (i > 0 && i <= CATS.length && CATS[i - 1].id === f)
-        || (i === CATS.length + 1 && f === '__tested');
-      b.classList.toggle('on', on);
-    });
+    /* 排列顺序不变量：0=全部, 1..CATS.length=各分类, 末位=已实测 */
+    var onIdx = f === 'all' ? 0 : (f === '__tested' ? CATS.length + 1 : 0);
+    if (f !== 'all' && f !== '__tested') {
+      for (var i = 0; i < CATS.length; i++) { if (CATS[i].id === f) { onIdx = i + 1; break; } }
+    }
+    var box = $('#chips');
+    var kids = Array.prototype.slice.call(box.children);
+    /* ---- 标签让位第一步：切换选中态之前，记录每颗的当前布局位 ---- */
+    var before = kids.map(function (b) { return { x: b.offsetLeft, y: b.offsetTop }; });
+    kids.forEach(function (b, i) { b.classList.toggle('on', i === onIdx); });
+    /* 强制回流：让紧接着的测量拿到切换（含选中项真实变大）之后的布局 */
+    void box.offsetWidth;
+    /* ---- 第二步：读新位置，用 FLIP 让邻居从旧位置平滑滑过去 ----
+       用 WAAPI 而不是 CSS transition：动画结束会自动回到自然布局，不留内联样式，
+       也不会盖住 :active 之类的其他过渡。 */
+    if (!motionOff) {
+      kids.forEach(function (b, i) {
+        var dx = before[i].x - b.offsetLeft, dy = before[i].y - b.offsetTop;
+        if (!dx && !dy) return;
+        b.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px)' }, { transform: 'translate(0,0)' }],
+          { duration: 320, easing: 'cubic-bezier(.22,1,.36,1)' });
+      });
+    }
     renderHome();
   }
   function renderHome() {
@@ -7192,16 +7226,73 @@ window.CAT_DATA = (function () {
   $('#q').addEventListener('input', function () { clearTimeout(tq); tq = setTimeout(doSearch, 90); });
   $('#clr').addEventListener('click', function () { $('#q').value = ''; doSearch(); $('#q').focus(); });
 
-  /* ---------- detail sheet ---------- */
+  /* ---------- detail sheet · Trigger Morph（从按钮形变展开） ---------- */
   var sheet = $('#sheet'), mask = $('#mask'), lastFocus = null;
-  var sheetCleanup = null;
+  var sheetCleanup = null, opening = false;
+  var fx = [];                    // 当前活着的形变/淡入动画
+  var closeFinish = null;         // 收回还没播完时的收尾函数
+  var srcBtn = null;              // 「这次该从哪颗按钮长出来」的候选
+  var srcAtOpen = null;           // 打开那一刻冻结的源按钮：收回要原路返回它
+  var mountWhenSettled = null;    // 待挂载的演示：等面板落到最终几何再挂，否则测量全是错的
+  var MORPH_IN = 620, MORPH_OUT = 420;
+
   function runCleanup() {
+    if (mountWhenSettled) { mountWhenSettled = null; }
     if (typeof sheetCleanup === 'function') { try { sheetCleanup(); } catch (e) { } }
     sheetCleanup = null;
+  }
+  function killFx() {
+    var l = fx; fx = [];
+    l.forEach(function (a) { try { a.cancel(); } catch (e) { } });
+  }
+  /* 形变期间为了独占 transform 会临时钉住 left/top/宽高，收尾时必须还回去 */
+  function clearBox() {
+    sheet.style.left = ''; sheet.style.top = ''; sheet.style.right = '';
+    sheet.style.bottom = ''; sheet.style.width = ''; sheet.style.height = '';
+  }
+  /* 钉住当前视觉盒子：动画只改 transform + 尺寸，定位属性由这两者接管 */
+  function pinBox(tr) {
+    sheet.style.left = tr.left + 'px';
+    sheet.style.top = tr.top + 'px';
+    sheet.style.right = 'auto';
+    sheet.style.bottom = 'auto';
+    sheet.style.width = tr.width + 'px';
+    sheet.style.height = tr.height + 'px';
+  }
+  function sheetInner() {
+    return [sheet.querySelector('.sh-head'), sheet.querySelector('.sh-body')];
+  }
+
+  /* 触发源留存：事件委托路径拿不到「被点的是哪颗按钮」，在捕获阶段记下来。
+     两个入口都要挂：pointerdown 覆盖真实手指/鼠标；click 捕获覆盖键盘回车与程序化 .click()
+     （合成 click 不产生 pointerdown）。document 捕获先于元素自身的 click 处理器，
+     所以打开面板时 srcBtn 已经是当前这颗按钮。面板内部的按钮跳过。 */
+  function noteSource(e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    if (t.closest('#sheet')) return;
+    var b = t.closest('button');
+    if (b) srcBtn = b;
+  }
+  document.addEventListener('pointerdown', noteSource, true);
+  document.addEventListener('click', noteSource, true);
+
+  /* 源按钮的真实矩形。已滚出视口或尺寸归零 → 坐标失效，返回 null，调用方退回本地淡变。
+     不传按钮时用最近一次 pointerdown 记下的那颗（打开时用；收回时必须显式传 srcAtOpen，
+     免得点「关闭」时把落点算到别的按钮上）。 */
+  function sourceRect(btn) {
+    var b = btn || srcBtn;
+    if (!b || !b.isConnected) return null;
+    var r = b.getBoundingClientRect();
+    if (r.width < 8 || r.height < 8) return null;
+    if (r.bottom < 4 || r.top > (window.innerHeight || 0) - 4) return null;
+    return r;
   }
 
   function openSheet(rec) {
     if (!rec) return;
+    /* 上一次收回还没播完就要开新的：先把它一帧收干净，否则两份动画抢同一组属性 */
+    flushClose();
     lastFocus = document.activeElement;
     var it = rec.it, c = rec.cat;
     var demoFn = window.CAT_DEMO ? window.CAT_DEMO(c.id, it.n) : null;
@@ -7233,16 +7324,21 @@ window.CAT_DATA = (function () {
       again.addEventListener('click', function () {
         runCleanup();
         stage.innerHTML = '';
+        /* 形变没播完时面板还不是最终宽度，演示里的网格/测量会算错 —— 延到落定再挂 */
+        if (opening) { mountWhenSettled = function () { mountWhenSettled = null; try { sheetCleanup = demoFn(stage) || null; } catch (e) { } }; return; }
         try { sheetCleanup = demoFn(stage) || null; } catch (e) { }
       });
       tools.appendChild(again);
       dblk.appendChild(tools);
       body.appendChild(dblk);
-      // 面板先可见再挂载，否则测量全是 0
-      setTimeout(function () {
+      /* 挂载时机：形变期间面板还只有按钮那么大，演示里凡是「测量自己容器」的（舞台尺寸、
+         卡片宽度、网格列数）都会量到错的值 —— 等形变落到最终几何再挂。
+         降级路径没有形变，面板当场就是最终尺寸，立刻挂即可。 */
+      mountWhenSettled = function () {
+        mountWhenSettled = null;
         runCleanup();
         try { sheetCleanup = demoFn(stage) || null; } catch (e) { }
-      }, 60);
+      };
     }
 
     if (it.use) {
@@ -7280,20 +7376,126 @@ window.CAT_DATA = (function () {
     body.appendChild(foot);
     body.scrollTop = 0;
     sheet.classList.add('on');
-    mask.classList.add('on');
     document.body.classList.add('locked');
+    morphIn();
     setTimeout(function () { $('#shClose').focus(); }, 240);
   }
+
+  /* ---------- 从按钮形变展开：面板的起点 = 被点按钮的真实矩形 ----------
+     起点实时量（宽度随文案/屏宽变化，不能硬编码），圆角与尺寸一起插值，
+     内容延到 62% 才淡入，否则文字会被拉伸变形。 */
+  function morphIn() {
+    killFx();                                        // 清掉上一次可能残留的 fill:both 动画
+    mask.classList.add('on');
+    var tr = sheet.getBoundingClientRect();          // 已加 .on：拿到最终静止几何
+    var r = motionOff ? null : sourceRect();
+    var inner = sheetInner();
+
+    /* 降级：用户关了动效、或源按钮已失效（滚走了 / 被移除了）—— 不做形变，本地淡入，
+       功能完全保留。没有源矩形时按参考实现的「失效源坐标」处理：短退场，不飞向旧坐标。 */
+    if (!r || !tr.width || !tr.height) {
+      var d = motionOff ? 1 : 190;
+      fx.push(sheet.animate([{ opacity: 0 }, { opacity: 1 }],
+        { duration: d, easing: 'ease-out', fill: 'both' }));
+      fx.push(mask.animate([{ opacity: 0 }, { opacity: 1 }],
+        { duration: d, easing: 'ease-out', fill: 'both' }));
+      /* 没有形变：面板一上来就是最终几何，可以立刻挂演示 */
+      if (mountWhenSettled) mountWhenSettled();
+      return;
+    }
+
+    srcAtOpen = srcBtn;
+    opening = true;
+    pinBox(tr);
+    var endRadius = getComputedStyle(sheet).borderRadius;
+    var shell = sheet.animate([
+      { transform: 'translate(' + (r.left - tr.left) + 'px,' + (r.top - tr.top) + 'px)',
+        width: r.width + 'px', height: r.height + 'px', borderRadius: '999px', opacity: .5 },
+      { transform: 'translate(0,0)', width: tr.width + 'px', height: tr.height + 'px',
+        borderRadius: endRadius, opacity: 1 }
+    ], { duration: MORPH_IN, easing: 'cubic-bezier(.22,.9,.24,1)', fill: 'both' });
+    fx.push(shell);
+    var kf = [{ opacity: 0, transform: 'translateY(14px)' },
+              { opacity: 0, transform: 'translateY(14px)', offset: .62 },
+              { opacity: 1, transform: 'translateY(0)' }];
+    inner.forEach(function (n) { if (n) fx.push(n.animate(kf, { duration: MORPH_IN, easing: 'ease-out', fill: 'both' })); });
+    fx.push(mask.animate([{ opacity: 0 }, { opacity: 1 }], { duration: MORPH_IN, easing: 'ease-out', fill: 'both' }));
+
+    /* 收尾：终帧等于自然几何，此刻取消动画 + 还回定位属性不会跳（同一 tick 内完成） */
+    shell.finished.then(function () {
+      if (!opening) return;
+      opening = false;
+      killFx(); clearBox();
+      if (mountWhenSettled) mountWhenSettled();   /* 面板已到最终尺寸，现在挂演示才是准的 */
+    }).catch(function () { });
+  }
+
+  /* 关闭：原路收回按钮，不是滑出屏幕。内层先淡出，外壳再缩回 */
   function closeSheet() {
-    runCleanup();
-    sheet.classList.remove('on');
-    mask.classList.remove('on');
+    /* 打开动画还没播完就关：先落到完整展开态，避免内容闪一下才收 */
+    if (opening) { opening = false; killFx(); clearBox(); }
+    var tr = sheet.getBoundingClientRect();
+    var r = motionOff ? null : sourceRect(srcAtOpen);
+
+    /* 降级：关了动效、或源按钮坐标已失效（滚走了/被移除了）—— 不能飞向过期坐标，
+       改为本地短退场。功能全保留。 */
+    if (!r || !tr.width || !tr.height) {
+      killFx();
+      var dur = motionOff ? 1 : 180;
+      fx.push(mask.animate([{ opacity: 1 }, { opacity: 0 }], { duration: dur, easing: 'ease-in', fill: 'both' }));
+      var out = sheet.animate([{ opacity: 1 }, { opacity: 0 }],
+        { duration: dur, easing: 'ease-in', fill: 'both' });
+      fx.push(out);
+      closeFinish = function () {
+        closeFinish = null;
+        killFx(); clearBox();
+        sheet.classList.remove('on');
+        mask.classList.remove('on');
+        sheetFinish();
+      };
+      out.finished.then(function () { if (closeFinish) closeFinish(); }).catch(function () { });
+      return;
+    }
+
+    killFx();
+    pinBox(tr);
+    var startRadius = getComputedStyle(sheet).borderRadius;
+    var shell = sheet.animate([
+      { transform: 'translate(0,0)', width: tr.width + 'px', height: tr.height + 'px',
+        borderRadius: startRadius, opacity: 1 },
+      { transform: 'translate(' + (r.left - tr.left) + 'px,' + (r.top - tr.top) + 'px)',
+        width: r.width + 'px', height: r.height + 'px', borderRadius: '999px', opacity: .4 }
+    ], { duration: MORPH_OUT, easing: 'cubic-bezier(.4,0,.7,.3)', fill: 'both' });
+    fx.push(shell);
+    fx.push(mask.animate([{ opacity: 1 }, { opacity: 0 }], { duration: MORPH_OUT, easing: 'ease-in', fill: 'both' }));
+    sheetInner().forEach(function (n) {
+      if (n) fx.push(n.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, easing: 'ease-in', fill: 'both' }));
+    });
+
+    closeFinish = function () {
+      closeFinish = null;
+      killFx(); clearBox();
+      sheet.classList.remove('on');
+      mask.classList.remove('on');
+      sheetFinish();
+    };
+    /* ★ 用 finished promise 收尾：在 onfinish 里再 cancel 会变成 oncancel，回调永不触发 */
+    shell.finished.then(function () { if (closeFinish) closeFinish(); }).catch(function () { });
+  }
+  function sheetFinish() {
+    runCleanup();                      /* 演示活到收起动画结束，避免舞台中途空掉 */
+    srcAtOpen = null;
     document.body.classList.remove('locked');
     if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) { } }
   }
+  /* 上一次收回还没播完就要开新的：先把它一帧收干净，否则两份动画抢同一组属性 */
+  function flushClose() { if (closeFinish) { var f = closeFinish; f(); } }
+
   $('#shClose').addEventListener('click', closeSheet);
   mask.addEventListener('click', closeSheet);
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSheet(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && (sheet.classList.contains('on') || closeFinish)) closeSheet();
+  });
 
   /* ---------- boot ---------- */
   buildChips();
